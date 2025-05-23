@@ -1,2 +1,2 @@
 # Readticle
-Advanced article aggregation app, a researcher's must-have
+Advanced article management app, a researcher's must-have

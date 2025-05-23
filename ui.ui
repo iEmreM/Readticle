@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1040</width>
+    <height>669</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Readticle</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">background-color: rgb(10, 25, 30);
+color:rgb(200,200,200);
+border-color:rgb(200,200,200);</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QGridLayout" name="gridLayout">
+    <item row="2" column="0">
+     <widget class="QGroupBox" name="searchgroupBox">
+      <property name="title">
+       <string>Search and Add</string>
+      </property>
+     </widget>
+    </item>
+    <item row="3" column="0">
+     <widget class="QGroupBox" name="articlesgroupBox">
+      <property name="title">
+       <string>Articles</string>
+      </property>
+     </widget>
+    </item>
+    <item row="3" column="1">
+     <widget class="QGroupBox" name="previewgroupBox">
+      <property name="title">
+       <string>Preview</string>
+      </property>
+     </widget>
+    </item>
+    <item row="2" column="1">
+     <widget class="QGroupBox" name="groupsgroupBox">
+      <property name="title">
+       <string>Groups</string>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="0" colspan="2">
+     <widget class="QGroupBox" name="statisticsgroupBox">
+      <property name="title">
+       <string>Statistisc</string>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>1040</width>
+     <height>26</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
