@@ -22,26 +22,26 @@ border-color:rgb(200,200,200);</string>
    <layout class="QGridLayout" name="gridLayout">
     <item row="0" column="0" colspan="2">
      <widget class="QGroupBox" name="statisticsgroupBox">
+      <property name="font">
+       <font>
+        <weight>75</weight>
+        <bold>true</bold>
+       </font>
+      </property>
       <property name="title">
        <string>Statistics</string>
       </property>
       <layout class="QGridLayout" name="gridLayout_2">
-       <item row="2" column="1">
-        <widget class="QProgressBar" name="indexingprogressBar">
+       <item row="1" column="0">
+        <widget class="QLabel" name="label_5">
          <property name="font">
           <font>
            <weight>75</weight>
            <bold>true</bold>
           </font>
          </property>
-         <property name="styleSheet">
-          <string notr="true">background-color: rgb(6, 72, 107);</string>
-         </property>
-         <property name="value">
-          <number>24</number>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignCenter</set>
+         <property name="text">
+          <string>Reading Progress</string>
          </property>
         </widget>
        </item>
@@ -60,7 +60,7 @@ border-color:rgb(200,200,200);</string>
           <string notr="true">background-color: rgb(6, 72, 107);</string>
          </property>
          <property name="value">
-          <number>24</number>
+          <number>0</number>
          </property>
          <property name="alignment">
           <set>Qt::AlignCenter</set>
@@ -76,101 +76,9 @@ border-color:rgb(200,200,200);</string>
          </property>
         </widget>
        </item>
-       <item row="1" column="0">
-        <widget class="QLabel" name="label_5">
-         <property name="font">
-          <font>
-           <weight>75</weight>
-           <bold>true</bold>
-          </font>
-         </property>
-         <property name="text">
-          <string>Reading Progress</string>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="0">
-        <widget class="QLabel" name="label_6">
-         <property name="font">
-          <font>
-           <weight>75</weight>
-           <bold>true</bold>
-          </font>
-         </property>
-         <property name="text">
-          <string>Indexing Progress</string>
-         </property>
-        </widget>
-       </item>
        <item row="0" column="0" colspan="2">
         <widget class="QWidget" name="widget" native="true">
          <layout class="QGridLayout" name="gridLayout_3">
-          <item row="0" column="0">
-           <widget class="QLabel" name="totalArticleslabel">
-            <property name="font">
-             <font>
-              <pointsize>14</pointsize>
-              <weight>75</weight>
-              <bold>true</bold>
-             </font>
-            </property>
-            <property name="text">
-             <string>0</string>
-            </property>
-            <property name="alignment">
-             <set>Qt::AlignCenter</set>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="0">
-           <widget class="QLabel" name="label">
-            <property name="font">
-             <font>
-              <weight>75</weight>
-              <bold>true</bold>
-             </font>
-            </property>
-            <property name="text">
-             <string>Total Articles</string>
-            </property>
-            <property name="alignment">
-             <set>Qt::AlignCenter</set>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="4">
-           <widget class="QLabel" name="label_4">
-            <property name="font">
-             <font>
-              <weight>75</weight>
-              <bold>true</bold>
-             </font>
-            </property>
-            <property name="text">
-             <string>Indexed Articles</string>
-            </property>
-            <property name="alignment">
-             <set>Qt::AlignCenter</set>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="1">
-           <widget class="QLabel" name="articlesReadlabel">
-            <property name="font">
-             <font>
-              <pointsize>14</pointsize>
-              <weight>75</weight>
-              <bold>true</bold>
-             </font>
-            </property>
-            <property name="text">
-             <string>0</string>
-            </property>
-            <property name="alignment">
-             <set>Qt::AlignCenter</set>
-            </property>
-           </widget>
-          </item>
           <item row="0" column="2">
            <widget class="QLabel" name="totalPageslabel">
             <property name="font">
@@ -204,8 +112,8 @@ border-color:rgb(200,200,200);</string>
             </property>
            </widget>
           </item>
-          <item row="0" column="4">
-           <widget class="QLabel" name="indexedArticleslabel">
+          <item row="0" column="0">
+           <widget class="QLabel" name="totalArticleslabel">
             <property name="font">
              <font>
               <pointsize>14</pointsize>
@@ -215,6 +123,22 @@ border-color:rgb(200,200,200);</string>
             </property>
             <property name="text">
              <string>0</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="label">
+            <property name="font">
+             <font>
+              <weight>75</weight>
+              <bold>true</bold>
+             </font>
+            </property>
+            <property name="text">
+             <string>Total Articles</string>
             </property>
             <property name="alignment">
              <set>Qt::AlignCenter</set>
@@ -253,6 +177,23 @@ border-color:rgb(200,200,200);</string>
             </property>
            </widget>
           </item>
+          <item row="0" column="1">
+           <widget class="QLabel" name="articlesReadlabel">
+            <property name="font">
+             <font>
+              <pointsize>14</pointsize>
+              <weight>75</weight>
+              <bold>true</bold>
+             </font>
+            </property>
+            <property name="text">
+             <string>0</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
           <item row="0" column="3">
            <widget class="QLabel" name="pagesReadlabel">
             <property name="font">
@@ -278,6 +219,12 @@ border-color:rgb(200,200,200);</string>
     </item>
     <item row="3" column="1">
      <widget class="QGroupBox" name="previewgroupBox">
+      <property name="font">
+       <font>
+        <weight>75</weight>
+        <bold>true</bold>
+       </font>
+      </property>
       <property name="title">
        <string>Preview</string>
       </property>
@@ -366,6 +313,12 @@ border-color:rgb(200,200,200);</string>
        </item>
        <item row="3" column="4">
         <widget class="QPushButton" name="fitWidthpushButton">
+         <property name="font">
+          <font>
+           <weight>75</weight>
+           <bold>true</bold>
+          </font>
+         </property>
          <property name="cursor">
           <cursorShape>PointingHandCursor</cursorShape>
          </property>
@@ -455,7 +408,7 @@ border-color:rgb(200,200,200);</string>
            <rect>
             <x>0</x>
             <y>0</y>
-            <width>502</width>
+            <width>508</width>
             <height>348</height>
            </rect>
           </property>
@@ -486,6 +439,12 @@ border-color:rgb(200,200,200);</string>
        </item>
        <item row="2" column="5">
         <widget class="QPushButton" name="openExternalpushButton">
+         <property name="font">
+          <font>
+           <weight>75</weight>
+           <bold>true</bold>
+          </font>
+         </property>
          <property name="cursor">
           <cursorShape>PointingHandCursor</cursorShape>
          </property>
@@ -496,6 +455,12 @@ border-color:rgb(200,200,200);</string>
        </item>
        <item row="3" column="5">
         <widget class="QPushButton" name="markAsReadpushButton">
+         <property name="font">
+          <font>
+           <weight>75</weight>
+           <bold>true</bold>
+          </font>
+         </property>
          <property name="cursor">
           <cursorShape>PointingHandCursor</cursorShape>
          </property>
@@ -509,6 +474,12 @@ border-color:rgb(200,200,200);</string>
     </item>
     <item row="2" column="0" rowspan="2">
      <widget class="QGroupBox" name="articlesgroupBox">
+      <property name="font">
+       <font>
+        <weight>75</weight>
+        <bold>true</bold>
+       </font>
+      </property>
       <property name="title">
        <string>Articles</string>
       </property>
@@ -618,6 +589,24 @@ border-color:rgb(200,200,200);</string>
            <bold>false</bold>
           </font>
          </property>
+         <property name="styleSheet">
+          <string notr="true">QListWidget::item {
+	background-color: rgb(20, 35, 40);
+    border: 1px solid rgb(80, 80, 80);
+    border-radius: 6px;
+	padding: 12px;
+    margin: 3px;
+    min-height: 50px;
+    }
+    QListWidget::item:hover {
+     	background-color: rgb(25, 45, 50);
+        border: 1px solid rgb(120, 120, 120);
+    }
+    QListWidget::item:selected {
+        background-color: rgb(30, 60, 80);
+        border: 2px solid rgb(52, 152, 219);
+}</string>
+         </property>
         </widget>
        </item>
        <item row="0" column="2">
@@ -654,7 +643,7 @@ border-color:rgb(200,200,200);</string>
         </widget>
        </item>
        <item row="2" column="2">
-        <widget class="QCheckBox" name="checkBox">
+        <widget class="QCheckBox" name="descendingcheckBox">
          <property name="font">
           <font>
            <weight>75</weight>
@@ -668,6 +657,12 @@ border-color:rgb(200,200,200);</string>
        </item>
        <item row="1" column="1" rowspan="2">
         <widget class="QLabel" name="label_8">
+         <property name="font">
+          <font>
+           <weight>75</weight>
+           <bold>true</bold>
+          </font>
+         </property>
          <property name="text">
           <string>Sort By</string>
          </property>
@@ -705,11 +700,33 @@ border-color:rgb(200,200,200);</string>
          </property>
         </widget>
        </item>
+       <item row="1" column="0" rowspan="2">
+        <widget class="QLabel" name="articleNumlabel">
+         <property name="font">
+          <font>
+           <weight>75</weight>
+           <bold>true</bold>
+          </font>
+         </property>
+         <property name="text">
+          <string>0 articles listed</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignBottom|Qt::AlignLeading|Qt::AlignLeft</set>
+         </property>
+        </widget>
+       </item>
       </layout>
      </widget>
     </item>
     <item row="2" column="1">
      <widget class="QGroupBox" name="groupsgroupBox">
+      <property name="font">
+       <font>
+        <weight>75</weight>
+        <bold>true</bold>
+       </font>
+      </property>
       <property name="title">
        <string>Groups</string>
       </property>
@@ -769,6 +786,24 @@ border-color:rgb(200,200,200);</string>
            <weight>50</weight>
            <bold>false</bold>
           </font>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QListWidget::item {
+                background-color: rgb(20, 35, 40);
+                border: 1px solid rgb(80, 80, 80);
+                border-radius: 6px;
+                padding: 8px;
+                margin: 2px;
+                min-height: 30px;
+            }
+            QListWidget::item:hover {
+                background-color: rgb(25, 45, 50);
+                border: 1px solid rgb(120, 120, 120);
+            }
+            QListWidget::item:selected {
+                background-color: rgb(30, 60, 80);
+                border: 2px solid rgb(52, 152, 219);
+            }</string>
          </property>
         </widget>
        </item>

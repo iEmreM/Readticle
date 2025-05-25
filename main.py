@@ -216,35 +216,6 @@ class ArticleDatabase:
         result = cursor.fetchone()
         conn.close()
         return result[0] if result else False
-    
-    def index_article_content(self, article_id, file_path):
-        """Index article content for search"""
-        try:
-            doc = fitz.open(file_path)
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            for page_num in range(len(doc)):
-                page = doc.load_page(page_num)
-                text = page.get_text()
-                
-                cursor.execute('''
-                    INSERT INTO article_index (article_id, page_number, content)
-                    VALUES (?, ?, ?)
-                ''', (article_id, page_num + 1, text))
-            
-            # Mark article as indexed
-            cursor.execute('''
-                UPDATE articles SET is_indexed = TRUE WHERE id = ?
-            ''', (article_id,))
-            
-            conn.commit()
-            conn.close()
-            doc.close()
-            return True
-        except Exception as e:
-            print(f"Error indexing article: {e}")
-            return False
 
 class PDFViewer:
     def __init__(self):
@@ -304,6 +275,184 @@ class PDFViewer:
             return True
         return False
 
+class IndexingWorker(QtCore.QThread):
+    """Worker thread for indexing PDF files"""
+    progress_updated = QtCore.pyqtSignal(int)  # Current progress
+    file_processed = QtCore.pyqtSignal(str, bool)  # File name, success
+    indexing_finished = QtCore.pyqtSignal(int, int)  # Total processed, total failed
+    
+    def __init__(self, files_data, db_path, parent=None):
+        super().__init__(parent)
+        self.files_data = files_data  # List of (article_id, file_path, title) tuples
+        self.db_path = db_path
+        self.total_files = len(files_data)
+        self.processed_count = 0
+        self.failed_count = 0
+        
+    def run(self):
+        """Main worker thread execution"""
+        for i, (article_id, file_path, title) in enumerate(self.files_data):
+            try:
+                success = self.index_single_file(article_id, file_path)
+                if success:
+                    self.processed_count += 1
+                else:
+                    self.failed_count += 1
+                    
+                # Emit progress signal
+                progress = int((i + 1) / self.total_files * 100)
+                self.progress_updated.emit(progress)
+                
+                # Emit file processed signal
+                self.file_processed.emit(os.path.basename(file_path), success)
+                
+            except Exception as e:
+                print(f"Error processing {file_path}: {e}")
+                self.failed_count += 1
+                self.file_processed.emit(os.path.basename(file_path), False)
+        
+        # Emit finished signal
+        self.indexing_finished.emit(self.processed_count, self.failed_count)
+    
+    def index_single_file(self, article_id, file_path):
+        """Index a single PDF file"""
+        try:
+            doc = fitz.open(file_path)
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Clear existing index entries for this article
+            cursor.execute("DELETE FROM article_index WHERE article_id = ?", (article_id,))
+            
+            for page_num in range(len(doc)):
+                page = doc.load_page(page_num)
+                text = page.get_text()
+                
+                cursor.execute('''
+                    INSERT INTO article_index (article_id, page_number, content)
+                    VALUES (?, ?, ?)
+                ''', (article_id, page_num + 1, text))
+            
+            # Mark article as indexed
+            cursor.execute('''
+                UPDATE articles SET is_indexed = TRUE WHERE id = ?
+            ''', (article_id,))
+            
+            conn.commit()
+            conn.close()
+            doc.close()
+            return True
+            
+        except Exception as e:
+            print(f"Error indexing {file_path}: {e}")
+            return False
+
+class ProgressDialog(QtWidgets.QDialog):
+    """Progress dialog for indexing operations"""
+    
+    def __init__(self, parent=None, title="Indexing Process"):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setModal(True)
+        self.setFixedSize(500, 200)
+        self.setWindowFlags(self.windowFlags() & ~QtCore.Qt.WindowCloseButtonHint)
+        
+        # Create layout
+        layout = QtWidgets.QVBoxLayout(self)
+        
+        # Title label
+        self.title_label = QtWidgets.QLabel("PDF files are being indexed...")
+        self.title_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.title_label.setStyleSheet("font-size: 14px; font-weight: bold; margin: 10px;")
+        layout.addWidget(self.title_label)
+        
+        # Progress bar
+        self.progress_bar = QtWidgets.QProgressBar()
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setMaximum(100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                background-color: rgb(6, 72, 107);
+            }
+        """)
+        layout.addWidget(self.progress_bar)
+        
+        # Status label
+        self.status_label = QtWidgets.QLabel("Starting...")
+        self.status_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.status_label.setStyleSheet("color: #666; margin: 5px;")
+        layout.addWidget(self.status_label)
+        
+        # File info label
+        self.file_label = QtWidgets.QLabel("")
+        self.file_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.file_label.setStyleSheet("color: #333; font-size: 11px; margin: 5px;")
+        layout.addWidget(self.file_label)
+        
+        # Cancel button
+        self.cancel_button = QtWidgets.QPushButton("Cancel")
+        self.cancel_button.setFixedSize(100, 30)
+        self.cancel_button.clicked.connect(self.cancel_operation)
+        button_layout = QtWidgets.QHBoxLayout()
+        button_layout.addStretch()
+        button_layout.addWidget(self.cancel_button)
+        button_layout.addStretch()
+        layout.addLayout(button_layout)
+        
+        # Worker thread reference
+        self.worker = None
+        self.cancelled = False
+        
+    def set_worker(self, worker):
+        """Set the worker thread and connect signals"""
+        self.worker = worker
+        
+        # Connect worker signals
+        self.worker.progress_updated.connect(self.update_progress)
+        self.worker.file_processed.connect(self.update_file_status)
+        self.worker.indexing_finished.connect(self.indexing_completed)
+        
+    def update_progress(self, value):
+        """Update progress bar"""
+        if not self.cancelled:
+            self.progress_bar.setValue(value)
+            self.status_label.setText(f"Progress: %{value}")
+    
+    def update_file_status(self, filename, success):
+        """Update current file being processed"""
+        if not self.cancelled:
+            if success:
+                self.file_label.setText(f"✓ {filename}")
+                self.file_label.setStyleSheet("color: #27ae60; font-size: 11px; margin: 5px;")
+            else:
+                self.file_label.setText(f"✗ {filename} (Error)")
+                self.file_label.setStyleSheet("color: #e74c3c; font-size: 11px; margin: 5px;")
+    
+    def indexing_completed(self, processed_count, failed_count):
+        """Handle indexing completion"""
+        if not self.cancelled:
+            self.progress_bar.setValue(100)
+            self.status_label.setText("Completed!")
+            self.file_label.setText(f"✓ {processed_count} files successfully indexed, {failed_count} errors")
+            self.file_label.setStyleSheet("color: #27ae60; font-size: 11px; margin: 5px;")
+            self.cancel_button.setText("Close")
+        
+        # Close dialog after 2 seconds
+        QtCore.QTimer.singleShot(2000, self.accept)
+    
+    def cancel_operation(self):
+        """Cancel the indexing operation"""
+        if self.worker and self.worker.isRunning():
+            self.cancelled = True
+            self.worker.terminate()
+            self.worker.wait()
+            self.status_label.setText("Cancelled")
+            self.file_label.setText("")
+        
+        self.reject()
+
 class Main(QtWidgets.QMainWindow):
     def __init__(self):
         super(Main, self).__init__()
@@ -317,6 +466,19 @@ class Main(QtWidgets.QMainWindow):
         # Current selections
         self.current_article_id = None
         self.current_group_id = None
+        
+        # Animation variables for statistics counters
+        self.animation_timers = {}
+        self.current_animated_values = {
+            'total_articles': 0,
+            'read_articles': 0,
+            'total_pages': 0,
+            'pages_read': 0,
+            'reading_progress': 0
+        }
+        
+        # Apply modern styling for better readability
+        self.style_ui_components()
         
         # Initialize UI components (will be implemented in UI updates)
         self.setup_connections()
@@ -332,6 +494,105 @@ class Main(QtWidgets.QMainWindow):
         
         # Setup context menus
         self.setup_context_menus()
+    
+    def style_ui_components(self):
+        """Apply modern styling to UI components for better readability"""
+        
+        # Set spacing for better item separation
+        self.ui.articleslistWidget.setSpacing(3)
+        self.ui.groupslistWidget.setSpacing(2)
+    
+    def animate_counter(self, counter_name, target_value, label_widget, duration=1000):
+        """Animate a counter from current value to target value"""
+        if counter_name in self.animation_timers:
+            self.animation_timers[counter_name].stop()
+        
+        start_value = self.current_animated_values.get(counter_name, 0)
+        if start_value == target_value:
+            return
+        
+        self.current_animated_values[counter_name] = start_value
+        
+        # Calculate animation parameters - more steps for smoother animation
+        steps = 50  # Increased from 30 for smoother animation
+        step_duration = duration // steps
+        increment = (target_value - start_value) / steps
+        current_step = 0
+        
+        def update_counter():
+            nonlocal current_step
+            current_step += 1
+            
+            if current_step <= steps:
+                # Calculate current value with smoother easing
+                progress = current_step / steps
+                # Smoother ease-in-out animation
+                if progress < 0.5:
+                    eased_progress = 2 * progress * progress
+                else:
+                    eased_progress = 1 - 2 * (1 - progress) * (1 - progress)
+                
+                current_value = int(start_value + (increment * steps * eased_progress))
+                
+                # Update the label
+                label_widget.setText(str(current_value))
+                self.current_animated_values[counter_name] = current_value
+            else:
+                # Ensure final value is exact
+                label_widget.setText(str(target_value))
+                self.current_animated_values[counter_name] = target_value
+                self.animation_timers[counter_name].stop()
+        
+        # Create and start timer
+        timer = QtCore.QTimer()
+        timer.timeout.connect(update_counter)
+        timer.start(step_duration)
+        self.animation_timers[counter_name] = timer
+    
+    def animate_progress_bar(self, target_percentage, duration=1200):
+        """Animate progress bar from current value to target"""
+        if 'progress_bar' in self.animation_timers:
+            self.animation_timers['progress_bar'].stop()
+        
+        start_value = self.current_animated_values.get('reading_progress', 0)
+        if start_value == target_percentage:
+            return
+        
+        # Calculate animation parameters - more steps for even smoother progress bar
+        steps = 60  # Increased from 40 for ultra-smooth progress bar animation
+        step_duration = duration // steps
+        increment = (target_percentage - start_value) / steps
+        current_step = 0
+        
+        def update_progress():
+            nonlocal current_step
+            current_step += 1
+            
+            if current_step <= steps:
+                # Calculate current value with gentle easing
+                progress = current_step / steps
+                # Gentle ease-in-out animation for progress bar
+                if progress < 0.5:
+                    eased_progress = 2 * progress * progress
+                else:
+                    eased_progress = 1 - 2 * (1 - progress) * (1 - progress)
+                
+                current_value = int(start_value + (increment * steps * eased_progress))
+                
+                # Update the progress bar
+                self.ui.readingprogressBar.setValue(current_value)
+                self.current_animated_values['reading_progress'] = current_value
+            else:
+                # Ensure final value is exact
+                self.ui.readingprogressBar.setValue(target_percentage)
+                self.current_animated_values['reading_progress'] = target_percentage
+                self.animation_timers['progress_bar'].stop()
+        
+        # Create and start timer
+        timer = QtCore.QTimer()
+        timer.timeout.connect(update_progress)
+        timer.start(step_duration)
+        self.animation_timers['progress_bar'] = timer
     
     def setup_connections(self):
         """Setup signal connections for UI elements"""
@@ -353,6 +614,7 @@ class Main(QtWidgets.QMainWindow):
         self.ui.sortcomboBox.currentTextChanged.connect(self.on_sort_changed)
         self.ui.showOnlyReadcheckBox.toggled.connect(self.on_show_read_toggled)
         self.ui.showOnlyUnreadcheckBox.toggled.connect(self.on_show_unread_toggled)
+        self.ui.descendingcheckBox.toggled.connect(self.on_descending_toggled)
         
         # Preview Navigation
         self.ui.previouspushButton.clicked.connect(self.on_previous_page)
@@ -374,26 +636,29 @@ class Main(QtWidgets.QMainWindow):
         self.ui.articleslistWidget.customContextMenuRequested.connect(self.show_article_context_menu)
     
     def refresh_statistics(self):
-        """Update statistics display"""
+        """Update statistics display with smooth animations"""
         stats = self.db.get_statistics()
         
-        # Update statistics labels
-        self.ui.totalArticleslabel.setText(str(stats['total_articles']))
-        self.ui.articlesReadlabel.setText(str(stats['read_articles']))
-        self.ui.totalPageslabel.setText(str(stats['total_pages']))
-        self.ui.indexedArticleslabel.setText(str(stats['indexed_articles']))
-        self.ui.pagesReadlabel.setText(str(stats['pages_read']))
+        # Animate statistics labels with staggered timing for visual appeal
+        self.animate_counter('total_articles', stats['total_articles'], self.ui.totalArticleslabel, 1000)
         
-        # Update progress bars
+        # Add delay for staggered animation effect
+        QtCore.QTimer.singleShot(200, lambda: self.animate_counter(
+            'read_articles', stats['read_articles'], self.ui.articlesReadlabel, 1000))
+        
+        QtCore.QTimer.singleShot(400, lambda: self.animate_counter(
+            'total_pages', stats['total_pages'], self.ui.totalPageslabel, 1200))
+        
+        QtCore.QTimer.singleShot(600, lambda: self.animate_counter(
+            'pages_read', stats['pages_read'], self.ui.pagesReadlabel, 1200))
+        
+        # Animate progress bar with delay
         if stats['total_articles'] > 0:
             read_percentage = int((stats['read_articles'] / stats['total_articles']) * 100)
-            index_percentage = int((stats['indexed_articles'] / stats['total_articles']) * 100)
         else:
             read_percentage = 0
-            index_percentage = 0
-            
-        self.ui.readingprogressBar.setValue(read_percentage)
-        self.ui.indexingprogressBar.setValue(index_percentage)
+        
+        QtCore.QTimer.singleShot(800, lambda: self.animate_progress_bar(read_percentage, 1200))
     
     def refresh_groups(self):
         """Update groups display"""
@@ -453,82 +718,121 @@ class Main(QtWidgets.QMainWindow):
         
         # Sort articles based on sort combo box
         sort_option = self.ui.sortcomboBox.currentText()
+        is_descending = self.ui.descendingcheckBox.isChecked()
+        
         if sort_option == "Title":
-            articles.sort(key=lambda x: x[1])  # title column
+            articles.sort(key=lambda x: x[1], reverse=is_descending)  # title column
         elif sort_option == "Pages":
-            articles.sort(key=lambda x: x[4], reverse=True)  # pages column
+            articles.sort(key=lambda x: x[4], reverse=not is_descending)  # pages column (default desc, so invert)
         elif sort_option == "Read Status":
-            articles.sort(key=lambda x: x[5], reverse=True)  # is_read column
+            articles.sort(key=lambda x: x[5], reverse=not is_descending)  # is_read column (default desc, so invert)
         else:  # Date Added (default)
-            articles.sort(key=lambda x: x[7], reverse=True)  # date_added column
+            articles.sort(key=lambda x: x[7], reverse=not is_descending)  # date_added column (default desc, so invert)
         
         # Add each article
         for article in articles:
             article_id, title, file_path, group_id, pages, is_read, is_indexed, date_added, date_read, file_size, keywords, notes = article
             
-            # Create display text with status indicators
-            read_status = "✓" if is_read else "○"
-            indexed_status = "🔍" if is_indexed else "○"
+            # Determine status and colors
+            read_icon = "✅" if is_read else "🔵"
+            status_color = "#2ecc71" if is_read else "#87ceeb"
+            status_text = "Read" if is_read else "Unread"
             
             # Format file size
             if file_size:
                 if file_size > 1024 * 1024:
                     size_str = f"{file_size / (1024 * 1024):.1f} MB"
+                    size_icon = "💿" if file_size > 5*1024*1024 else "💾"
                 else:
                     size_str = f"{file_size / 1024:.1f} KB"
+                    size_icon = "💾"
             else:
                 size_str = "Unknown"
+                size_icon = "❓"
             
-            display_text = f"{read_status} {indexed_status} {title}"
-            detail_text = f"📄 {pages} pages • {size_str} • {os.path.basename(file_path)}"
+            # Choose appropriate page icon
+            pages_icon = "📚" if pages > 50 else "📄"
             
-            # Create list item
+            # Create formatted text content (no HTML)
+            title_line = f"{read_icon} {title}"
+            details_line = f"{pages_icon} {pages} pages  •  {size_icon} {size_str}  •  📊 {status_text}"
+            
+            # Create list item with plain text formatting
             article_item = QtWidgets.QListWidgetItem()
-            article_item.setText(f"{display_text}\n{detail_text}")
+            article_item.setText(f"{title_line}\n{details_line}")
             article_item.setData(QtCore.Qt.UserRole, article_id)
             
-            # Color coding based on status
+            # Set color based on read status
             if is_read:
                 article_item.setForeground(QtGui.QColor("#2ecc71"))  # Green for read
-            elif is_indexed:
-                article_item.setForeground(QtGui.QColor("#3498db"))  # Blue for indexed
             else:
-                article_item.setForeground(QtGui.QColor("#e74c3c"))  # Red for unprocessed
+                article_item.setForeground(QtGui.QColor("#87ceeb"))  # Light blue for unread
+            
+            # Set appropriate size hint for better display
+            article_item.setSizeHint(QtCore.QSize(article_item.sizeHint().width(), 65))
                 
             self.ui.articleslistWidget.addItem(article_item)
+        
+        # Update article count label
+        article_count = len(articles)
+        if article_count == 1:
+            self.ui.articleNumlabel.setText("1 article listed")
+        else:
+            self.ui.articleNumlabel.setText(f"{article_count} articles listed")
     
     def add_article_from_file(self, file_path):
         """Add an article from a file path"""
         if not os.path.exists(file_path):
-            return False
+            return None
         
         title = os.path.splitext(os.path.basename(file_path))[0]
         article_id = self.db.add_article(title, file_path, self.current_group_id)
         
         # Check if article was actually added (not a duplicate)
         if article_id is None:
-            return False  # Article already exists or failed to add
+            return None  # Article already exists or failed to add
         
-        # Auto-index the article content
-        self.db.index_article_content(article_id, file_path)
-        
-        self.refresh_statistics()
-        self.refresh_articles()
-        return True
+        # Return article data for indexing (don't index immediately)
+        return (article_id, file_path, title)
     
     def add_folder_articles(self, folder_path):
         """Add all PDF files from a folder (not including subfolders)"""
-        pdf_files = []
+        added_articles = []
         skipped_files = []
         
         # Use glob instead of rglob to only get files from the immediate folder
         for file_path in Path(folder_path).glob("*.pdf"):
-            if self.add_article_from_file(str(file_path)):
-                pdf_files.append(str(file_path))
+            article_data = self.add_article_from_file(str(file_path))
+            if article_data:
+                added_articles.append(article_data)
             else:
                 skipped_files.append(str(file_path))
         
-        return pdf_files, skipped_files
+        return added_articles, skipped_files
+    
+    def start_indexing_thread(self, articles_data):
+        """Start indexing thread for multiple articles"""
+        if not articles_data:
+            return
+            
+        # Create progress dialog
+        progress_dialog = ProgressDialog(self, "PDF Indexing")
+        
+        # Create worker thread
+        worker = IndexingWorker(articles_data, self.db.db_path, self)
+        progress_dialog.set_worker(worker)
+        
+        # Connect worker finished signal to refresh UI
+        worker.indexing_finished.connect(lambda: self.refresh_statistics())
+        worker.indexing_finished.connect(lambda: self.refresh_articles())
+        
+        # Start worker and show dialog
+        worker.start()
+        progress_dialog.exec_()
+        
+        # Clean up
+        worker.wait()
+        worker.deleteLater()
     
     def search_articles(self, query):
         """Search articles by title or content"""
@@ -643,7 +947,10 @@ class Main(QtWidgets.QMainWindow):
             self, "Select PDF File", "", "PDF Files (*.pdf)"
         )
         if file_path:
-            if self.add_article_from_file(file_path):
+            article_data = self.add_article_from_file(file_path)
+            if article_data:
+                # Start indexing in background thread
+                self.start_indexing_thread([article_data])
                 QtWidgets.QMessageBox.information(
                     self, "File Added", 
                     f"Successfully added: {os.path.basename(file_path)}"
@@ -660,10 +967,15 @@ class Main(QtWidgets.QMainWindow):
             self, "Select Folder Containing PDFs"
         )
         if folder_path:
-            pdf_files, skipped_files = self.add_folder_articles(folder_path)
+            added_articles, skipped_files = self.add_folder_articles(folder_path)
+            
+            if added_articles:
+                # Start indexing in background thread
+                self.start_indexing_thread(added_articles)
+            
             QtWidgets.QMessageBox.information(
                 self, "Import Complete", 
-                f"Imported {len(pdf_files)} PDF files from folder. Skipped {len(skipped_files)} duplicates."
+                f"Imported {len(added_articles)} PDF files from folder. Skipped {len(skipped_files)} duplicates."
             )
     
     def on_new_group_clicked(self):
@@ -764,6 +1076,10 @@ class Main(QtWidgets.QMainWindow):
             self.ui.showOnlyReadcheckBox.blockSignals(False)
         self.refresh_articles()
     
+    def on_descending_toggled(self):
+        """Handle descending sort toggle"""
+        self.refresh_articles()
+    
     def on_previous_page(self):
         """Handle previous page button"""
         if self.pdf_viewer.previous_page():
@@ -849,6 +1165,7 @@ class Main(QtWidgets.QMainWindow):
                 # Other actions
                 preview_action = menu.addAction("👁 Open Preview")
                 external_action = menu.addAction("📖 Open External")
+                location_action = menu.addAction("📂 Open File Location")
                 
                 menu.addSeparator()
                 
@@ -880,6 +1197,8 @@ class Main(QtWidgets.QMainWindow):
                 elif action == external_action:
                     self.current_article_id = article_id
                     self.on_open_external()
+                elif action == location_action:
+                    self.open_file_location(article_id)
                 elif action == no_group_action:
                     self.move_article_to_group(article_id, None)
                 elif action in group_actions:
@@ -943,6 +1262,45 @@ class Main(QtWidgets.QMainWindow):
             
             self.refresh_statistics()
             self.refresh_articles()
+
+    def open_file_location(self, article_id):
+        """Open the file location in file explorer"""
+        conn = sqlite3.connect(self.db.db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT file_path FROM articles WHERE id = ?", (article_id,))
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result:
+            file_path = result[0]
+            folder_path = os.path.dirname(os.path.abspath(file_path))
+            
+            try:
+                import platform
+                system = platform.system()
+                
+                if system == "Windows":
+                    # Windows - Select file in explorer
+                    os.system(f'explorer /select,"{file_path}"')
+                elif system == "Darwin":  # macOS
+                    # macOS - Reveal in Finder
+                    os.system(f'open -R "{file_path}"')
+                else:  # Linux and other Unix systems
+                    # Linux - Open folder (most file managers don't support file selection)
+                    os.system(f'xdg-open "{folder_path}"')
+                    
+            except Exception as e:
+                # Fallback: just open the folder
+                try:
+                    if os.name == 'nt':  # Windows
+                        os.startfile(folder_path)
+                    else:  # Unix/Linux/macOS
+                        os.system(f'xdg-open "{folder_path}" || open "{folder_path}"')
+                except Exception:
+                    QtWidgets.QMessageBox.warning(
+                        self, "Error", 
+                        f"Could not open file location: {folder_path}"
+                    )
 
 class GroupDialog(QtWidgets.QDialog):
     """Dialog for creating/editing groups"""
