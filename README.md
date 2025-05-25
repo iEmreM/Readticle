@@ -20,7 +20,6 @@ pip install -r requirements.txt
 <br />
 
 ## 🚀 Running the Application
-### Option 1: From Source
 - Clone this GitHub repository
 ```bash
 git clone https://github.com/iEmreM/Readticle.git
