@@ -64,6 +64,10 @@ class ArticleDatabase:
     
     def add_article(self, title, file_path, group_id=None):
         """Add a new article to the database"""
+        # Check if article with same file path already exists
+        if self.article_exists(file_path):
+            return None  # Article already exists
+            
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
@@ -71,15 +75,29 @@ class ArticleDatabase:
         file_size = os.path.getsize(file_path)
         pages = self.get_pdf_page_count(file_path)
         
-        cursor.execute('''
-            INSERT INTO articles (title, file_path, group_id, pages, file_size)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (title, file_path, group_id, pages, file_size))
-        
-        article_id = cursor.lastrowid
-        conn.commit()
+        try:
+            cursor.execute('''
+                INSERT INTO articles (title, file_path, group_id, pages, file_size)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (title, file_path, group_id, pages, file_size))
+            
+            article_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+            return article_id
+        except sqlite3.IntegrityError:
+            # File path already exists due to UNIQUE constraint
+            conn.close()
+            return None
+    
+    def article_exists(self, file_path):
+        """Check if an article with the given file path already exists"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM articles WHERE file_path = ?", (file_path,))
+        exists = cursor.fetchone()[0] > 0
         conn.close()
-        return article_id
+        return exists
     
     def get_pdf_page_count(self, file_path):
         """Get the number of pages in a PDF file"""
@@ -487,6 +505,10 @@ class Main(QtWidgets.QMainWindow):
         title = os.path.splitext(os.path.basename(file_path))[0]
         article_id = self.db.add_article(title, file_path, self.current_group_id)
         
+        # Check if article was actually added (not a duplicate)
+        if article_id is None:
+            return False  # Article already exists or failed to add
+        
         # Auto-index the article content
         self.db.index_article_content(article_id, file_path)
         
@@ -495,12 +517,18 @@ class Main(QtWidgets.QMainWindow):
         return True
     
     def add_folder_articles(self, folder_path):
-        """Add all PDF files from a folder"""
+        """Add all PDF files from a folder (not including subfolders)"""
         pdf_files = []
-        for file_path in Path(folder_path).rglob("*.pdf"):
+        skipped_files = []
+        
+        # Use glob instead of rglob to only get files from the immediate folder
+        for file_path in Path(folder_path).glob("*.pdf"):
             if self.add_article_from_file(str(file_path)):
                 pdf_files.append(str(file_path))
-        return pdf_files
+            else:
+                skipped_files.append(str(file_path))
+        
+        return pdf_files, skipped_files
     
     def search_articles(self, query):
         """Search articles by title or content"""
@@ -615,7 +643,16 @@ class Main(QtWidgets.QMainWindow):
             self, "Select PDF File", "", "PDF Files (*.pdf)"
         )
         if file_path:
-            self.add_article_from_file(file_path)
+            if self.add_article_from_file(file_path):
+                QtWidgets.QMessageBox.information(
+                    self, "File Added", 
+                    f"Successfully added: {os.path.basename(file_path)}"
+                )
+            else:
+                QtWidgets.QMessageBox.warning(
+                    self, "Duplicate File", 
+                    f"File already exists in library: {os.path.basename(file_path)}"
+                )
     
     def on_add_folder_clicked(self):
         """Handle add folder button click"""
@@ -623,10 +660,10 @@ class Main(QtWidgets.QMainWindow):
             self, "Select Folder Containing PDFs"
         )
         if folder_path:
-            pdf_files = self.add_folder_articles(folder_path)
+            pdf_files, skipped_files = self.add_folder_articles(folder_path)
             QtWidgets.QMessageBox.information(
                 self, "Import Complete", 
-                f"Imported {len(pdf_files)} PDF files from folder."
+                f"Imported {len(pdf_files)} PDF files from folder. Skipped {len(skipped_files)} duplicates."
             )
     
     def on_new_group_clicked(self):
